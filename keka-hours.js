@@ -146,6 +146,12 @@
     const overtimeStr = r.overtimeMinutes > 0 ? `${Math.floor(r.overtimeMinutes/60)} Hr ${r.overtimeMinutes%60} Min` : 'No overtime';
     const remainingStr = r.remainingMinutes <= 0 ? '8 hours completed! 🎉' : `${Math.floor(r.remainingMinutes/60)}h ${r.remainingMinutes%60}m`;
 
+    // dynamic background for Overtime/Remaining block
+    const isCompleted = r.remainingMinutes <= 0;
+    const overRemainBg = isCompleted
+      ? 'linear-gradient(135deg,#10b981,#059669)'   // green when completed
+      : 'linear-gradient(135deg,#ef4444,#dc2626)';  // red when not completed
+
     let wrapper = container.querySelector('.keka-autoupdate-wrapper');
     if(!wrapper){
       wrapper = document.createElement('div');
@@ -168,7 +174,7 @@
           <div style="font-size:13px;opacity:.95">Total Breaks</div>
           <div style="font-size:16px;font-weight:600;margin-top:6px">${Math.floor(r.breakMinutes/60)}h ${r.breakMinutes%60}m</div>
         </div>
-        <div style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;padding:12px;border-radius:10px">
+        <div style="background:${overRemainBg};color:#fff;padding:12px;border-radius:10px">
           <div style="font-size:13px;opacity:.95">Overtime / Remaining</div>
           <div style="font-size:16px;font-weight:600;margin-top:6px">${overtimeStr} / ${remainingStr}</div>
         </div>
@@ -243,4 +249,3 @@
 
   toast('KekaHours: loaded (break chip right-aligned + live refresh)');
 })();
-
