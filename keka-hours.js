@@ -1,4 +1,4 @@
-// keka-hours-autoupdate-breaks-right-side.js (with 8-hour notification)
+// keka-hours-autoupdate-breaks-right-side.js (with 8-hour notification + floating timer)
 (function(){
   'use strict';
 
@@ -68,6 +68,148 @@
 
     return mins;
   };
+
+  /* -----------------------  Floating Timer Widget ------------------------ */
+  let floatingTickInterval = null;
+
+  function createFloatingTimer() {
+    if(document.getElementById('floatingTimerBox')) return;
+    const timerBox = document.createElement("div");
+    timerBox.id = "floatingTimerBox";
+    timerBox.style.position = "fixed";
+    timerBox.style.top = "20px";
+    timerBox.style.right = "20px";
+    timerBox.style.zIndex = "999999999";
+    timerBox.style.background = "#1e1e1e";
+    timerBox.style.color = "white";
+    timerBox.style.padding = "10px 14px";
+    timerBox.style.borderRadius = "10px";
+    timerBox.style.boxShadow = "0 6px 20px rgba(0,0,0,0.25)";
+    timerBox.style.fontSize = "13px";
+    timerBox.style.fontFamily = "Arial, Helvetica, sans-serif";
+    timerBox.style.cursor = "move";
+    timerBox.style.userSelect = "none";
+    timerBox.style.minWidth = "150px";
+    timerBox.style.lineHeight = "1.25";
+
+    timerBox.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <div style="font-weight:600">⏱ Work Timer</div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button id="kekaTimerMinBtn" title="Minimize" style="background:transparent;border:0;color:#ddd;cursor:pointer;font-size:14px;padding:2px 6px">_</button>
+          <button id="kekaTimerCloseBtn" title="Close" style="background:transparent;border:0;color:#ddd;cursor:pointer;font-size:14px;padding:2px 6px">×</button>
+        </div>
+      </div>
+      <div style="margin-top:8px;font-size:12px" id="ft_lines">
+        <div id="ft_total">Total: --:--:--</div>
+        <div id="ft_left">Left: --:--:--</div>
+      </div>
+    `;
+
+    document.body.appendChild(timerBox);
+    makeDraggable(timerBox);
+
+    // Minimize / Close
+    const minBtn = document.getElementById('kekaTimerMinBtn');
+    const closeBtn = document.getElementById('kekaTimerCloseBtn');
+    const lines = document.getElementById('ft_lines');
+
+    minBtn.onclick = (e) => {
+      e.stopPropagation();
+      if(lines.style.display === 'none') {
+        lines.style.display = 'block';
+        minBtn.textContent = '_';
+      } else {
+        lines.style.display = 'none';
+        minBtn.textContent = '+';
+      }
+    };
+    closeBtn.onclick = (e) => {
+      e.stopPropagation();
+      try { timerBox.remove(); } catch(e){}
+      if(floatingTickInterval){ clearInterval(floatingTickInterval); floatingTickInterval = null; }
+    };
+
+    // start tick to update display every second (uses window.KekaHoursLatest)
+    if(floatingTickInterval) clearInterval(floatingTickInterval);
+    floatingTickInterval = setInterval(() => {
+      const latest = window.KekaHoursLatest || null;
+      if(!latest) {
+        updateFloatingTimer(0);
+        return;
+      }
+      // If latest.totalMinutes exists, derive seconds; else 0.
+      const totalSeconds = Math.round((latest.totalMinutes || 0) * 60);
+      updateFloatingTimer(totalSeconds);
+    }, 1000);
+  }
+
+  function updateFloatingTimer(totalSeconds) {
+    const ftTotal = document.getElementById("ft_total");
+    const ftLeft  = document.getElementById("ft_left");
+    const box = document.getElementById("floatingTimerBox");
+    if (!ftTotal || !ftLeft || !box) return;
+
+    let secs = Number(totalSeconds) || 0;
+    if(!Number.isFinite(secs) || secs < 0) secs = 0;
+
+    let hrs = Math.floor(secs / 3600);
+    let mins = Math.floor((secs % 3600) / 60);
+    let s = secs % 60;
+
+    let remaining = (8 * 3600) - secs;
+    if(remaining < 0) remaining = 0;
+
+    let rH = Math.floor(remaining / 3600);
+    let rM = Math.floor((remaining % 3600) / 60);
+    let rS = remaining % 60;
+
+    ftTotal.innerText = `Total: ${hrs}h ${mins}m ${s}s`;
+    ftLeft.innerText  = `Left: ${rH}h ${rM}m ${rS}s`;
+
+    // background color change when completed
+    if(remaining === 0) {
+      box.style.background = "#005eff"; // blue when completed
+    } else {
+      box.style.background = "#1e1e1e";
+    }
+  }
+
+  // Drag logic
+  function makeDraggable(el) {
+    let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+    el.onmousedown = dragMouseDown;
+    function dragMouseDown(e) {
+      e = e || window.event;
+      // only left click
+      if(e.button !== 0) return;
+      pos3 = e.clientX;
+      pos4 = e.clientY;
+      document.onmouseup = closeDragElement;
+      document.onmousemove = elementDrag;
+    }
+    function elementDrag(e) {
+      e = e || window.event;
+      pos1 = pos3 - e.clientX;
+      pos2 = pos4 - e.clientY;
+      pos3 = e.clientX;
+      pos4 = e.clientY;
+      // compute new position
+      const newTop = el.offsetTop - pos2;
+      const newLeft = el.offsetLeft - pos1;
+      // keep within viewport bounds
+      const maxLeft = window.innerWidth - el.offsetWidth - 8;
+      const maxTop = window.innerHeight - el.offsetHeight - 8;
+      el.style.top = Math.min(Math.max(8, newTop), Math.max(8, maxTop)) + "px";
+      el.style.left = Math.min(Math.max(8, newLeft), Math.max(8, maxLeft)) + "px";
+      // unset right to allow left positioning persistence
+      el.style.right = 'auto';
+    }
+    function closeDragElement() {
+      document.onmouseup = null;
+      document.onmousemove = null;
+    }
+  }
 
   /* -----------------------  Main Log Processor  ------------------------ */
   function processLogs(container, renderRowBadges = true){
@@ -143,7 +285,8 @@
       prevEnd = e;
     });
 
-    return {
+    // update global for timer usage
+    const result = {
       totalMinutes: totalM,
       totalHuman: `${Math.floor(totalM/60)} Hr ${totalM%60} Min`,
       firstStart,
@@ -152,6 +295,11 @@
       overtimeMinutes: Math.max(0, totalM - 8*60),
       remainingMinutes: Math.max(0, 8*60 - totalM)
     };
+
+    // store latest for floating tick
+    window.KekaHoursLatest = result;
+
+    return result;
   }
 
   /* -----------------------  Card Renderer  ------------------------ */
@@ -224,8 +372,6 @@
         }
       };
     });
-
-    window.KekaHoursLatest = r;
   }
 
   /* -----------------------  Observers & Auto Refresh  ------------------------ */
@@ -248,11 +394,17 @@
     if(refreshInterval) clearInterval(refreshInterval);
     refreshInterval = null;
 
+    if(floatingTickInterval) clearInterval(floatingTickInterval);
+    floatingTickInterval = null;
+
     lastContainer = null;
   };
 
   const onContainerReady = debounce((container) => {
     if(!container) return;
+
+    // ensure floating timer exists
+    try { createFloatingTimer(); } catch(e){}
 
     processLogs(container, true);
     renderCards(container);
@@ -263,6 +415,13 @@
       debounce(()=>{
         const r = processLogs(container, true);
         renderCards(container);
+
+        // update floating timer using latest
+        try {
+          if(window.KekaHoursLatest && typeof window.KekaHoursLatest.totalMinutes === 'number') {
+            updateFloatingTimer(Math.round(window.KekaHoursLatest.totalMinutes * 60));
+          }
+        } catch(e){}
 
         if(r && r.totalMinutes >= 480 && !eightHourNotified) {
           eightHourNotified = true;
@@ -278,6 +437,13 @@
     refreshInterval = setInterval(()=> {
       const r = processLogs(container, true);
       renderCards(container);
+
+      // update floating timer using latest
+      try {
+        if(window.KekaHoursLatest && typeof window.KekaHoursLatest.totalMinutes === 'number') {
+          updateFloatingTimer(Math.round(window.KekaHoursLatest.totalMinutes * 60));
+        }
+      } catch(e){}
 
       if(r && r.totalMinutes >= 480 && !eightHourNotified) {
         eightHourNotified = true;
@@ -311,5 +477,8 @@
     if(containerObserver) containerObserver.disconnect();
   });
 
-  toast('KekaHours: loaded ✓ (break chips + live refresh + 8-hour notifier)');
+  // create floating timer immediately (even if modal not open) so user sees it at start
+  try { createFloatingTimer(); } catch(e){}
+
+  toast('KekaHours: loaded ✓ (break chips + live refresh + 8-hour notifier + floating timer)');
 })();
